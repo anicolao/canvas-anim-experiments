@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Animation Performance Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        body {
+            background-color: black;
+        }
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100vh;
+        }
+        #stats {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: right;
+            line-height: 1.5;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="stats">
+        FPS: 0<br>
+        Frame Time: 0ms
+    </div>
+
+    <script>
+        // Canvas setup
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statsDiv = document.getElementById('stats');
+
+        // Set canvas size to full window
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Ball properties
+        const ball = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 30,
+            vx: 5,
+            vy: 3,
+            gravity: 0.5,
+            damping: 0.95, // Energy loss on bounce
+            color: 'red'
+        };
+
+        // Performance tracking
+        let lastTime = performance.now();
+        let frameCount = 0;
+        let fps = 0;
+        let frameTimes = [];
+        const maxFrameSamples = 60;
+
+        // Try to show Chrome DevTools FPS meter programmatically
+        // Note: This cannot be done programmatically for security reasons,
+        // but we'll provide instructions in the console
+        console.log('%c=== Canvas Animation Performance Test ===', 'color: #00ff00; font-size: 16px; font-weight: bold;');
+        console.log('%cTo enable Chrome FPS meter:', 'color: #00aaff; font-size: 14px;');
+        console.log('1. Open DevTools (F12 or Cmd+Option+I)');
+        console.log('2. Press Cmd+Shift+P (Mac) or Ctrl+Shift+P (Windows/Linux)');
+        console.log('3. Type "Show frames per second (FPS) meter"');
+        console.log('4. Press Enter');
+        console.log('%c=====================================', 'color: #00ff00; font-size: 16px; font-weight: bold;');
+
+        function updateBall(deltaTime) {
+            // Apply gravity
+            ball.vy += ball.gravity;
+
+            // Update position
+            ball.x += ball.vx;
+            ball.y += ball.vy;
+
+            // Bounce off walls
+            if (ball.x + ball.radius > canvas.width) {
+                ball.x = canvas.width - ball.radius;
+                ball.vx = -ball.vx * ball.damping;
+            } else if (ball.x - ball.radius < 0) {
+                ball.x = ball.radius;
+                ball.vx = -ball.vx * ball.damping;
+            }
+
+            // Bounce off floor and ceiling
+            if (ball.y + ball.radius > canvas.height) {
+                ball.y = canvas.height - ball.radius;
+                ball.vy = -ball.vy * ball.damping;
+            } else if (ball.y - ball.radius < 0) {
+                ball.y = ball.radius;
+                ball.vy = -ball.vy * ball.damping;
+            }
+        }
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = ball.color;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function updateStats(frameTime) {
+            // Add frame time to array
+            frameTimes.push(frameTime);
+            if (frameTimes.length > maxFrameSamples) {
+                frameTimes.shift();
+            }
+
+            // Calculate average frame time
+            const avgFrameTime = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+
+            // Update stats display
+            statsDiv.innerHTML = `FPS: ${fps.toFixed(1)}<br>Frame Time: ${avgFrameTime.toFixed(2)}ms`;
+        }
+
+        function animate(currentTime) {
+            const frameStartTime = performance.now();
+
+            // Calculate delta time
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            // Update FPS counter
+            frameCount++;
+            if (frameCount >= 10) {
+                fps = 1000 / (deltaTime || 1);
+                frameCount = 0;
+            }
+
+            // Clear canvas (black background)
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Update and draw ball
+            updateBall(deltaTime);
+            drawBall();
+
+            // Calculate frame paint time
+            const frameEndTime = performance.now();
+            const frameTime = frameEndTime - frameStartTime;
+
+            // Update stats
+            updateStats(frameTime);
+
+            // Continue animation
+            requestAnimationFrame(animate);
+        }
+
+        // Start animation
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
