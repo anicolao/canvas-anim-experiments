@@ -128,6 +128,7 @@
         // Handle checkbox change
         disableAutoBufferingCheckbox.addEventListener('change', () => {
             updateCanvasContext();
+            updateStripeCanvases(); // Update stripe canvases too
             resizeCanvas();
         });
 
@@ -172,6 +173,9 @@
             stripeOffscreenContexts = [];
             
             const stripeWidth = canvas.width / numStripes;
+            const contextOptions = {
+                desynchronized: disableAutoBufferingCheckbox.checked
+            };
             
             for (let i = 0; i < numStripes; i++) {
                 // Create main stripe canvas
@@ -179,7 +183,7 @@
                 stripeCanvas.width = Math.ceil(stripeWidth);
                 stripeCanvas.height = canvas.height;
                 stripeCanvases.push(stripeCanvas);
-                stripeContexts.push(stripeCanvas.getContext('2d'));
+                stripeContexts.push(stripeCanvas.getContext('2d', contextOptions));
                 
                 // Create offscreen stripe canvas if needed
                 if (useOffscreenCanvasCheckbox.checked) {
@@ -187,7 +191,7 @@
                     offscreenStripeCanvas.width = Math.ceil(stripeWidth);
                     offscreenStripeCanvas.height = canvas.height;
                     stripeOffscreenCanvases.push(offscreenStripeCanvas);
-                    stripeOffscreenContexts.push(offscreenStripeCanvas.getContext('2d'));
+                    stripeOffscreenContexts.push(offscreenStripeCanvas.getContext('2d', contextOptions));
                 } else {
                     stripeOffscreenCanvases.push(null);
                     stripeOffscreenContexts.push(null);
