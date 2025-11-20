@@ -32,10 +32,48 @@
             line-height: 1.5;
             pointer-events: none;
         }
+        #controls {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            line-height: 1.8;
+        }
+        #controls label {
+            display: block;
+            margin-bottom: 8px;
+        }
+        #controls input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        #controls input[type="number"] {
+            width: 60px;
+            margin-left: 5px;
+            background-color: #222;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 2px 5px;
+            font-family: 'Courier New', monospace;
+        }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
+    <div id="controls">
+        <label>
+            <input type="checkbox" id="clearCanvas" checked>
+            Clear whole canvas
+        </label>
+        <label>
+            Number of balls:
+            <input type="number" id="ballCount" min="1" max="100" value="1">
+        </label>
+    </div>
     <div id="stats">
         FPS: 0<br>
         Frame Time: 0ms
@@ -46,6 +84,8 @@
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const statsDiv = document.getElementById('stats');
+        const clearCanvasCheckbox = document.getElementById('clearCanvas');
+        const ballCountInput = document.getElementById('ballCount');
 
         // Set canvas size to full window
         function resizeCanvas() {
@@ -55,17 +95,42 @@
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
 
-        // Ball properties
-        const ball = {
-            x: canvas.width / 2,
-            y: canvas.height / 2,
-            radius: 30,
-            vx: 5,
-            vy: 3,
-            gravity: 0.5,
-            damping: 0.95, // Energy loss on bounce
-            color: 'red'
-        };
+        // Ball array
+        let balls = [];
+
+        // Function to create a ball with random position and velocity
+        function createBall() {
+            const colors = ['red', 'blue', 'green', 'yellow', 'cyan', 'magenta', 'orange', 'purple'];
+            return {
+                x: Math.random() * (canvas.width - 60) + 30,
+                y: Math.random() * (canvas.height - 60) + 30,
+                radius: 30,
+                vx: (Math.random() - 0.5) * 10,
+                vy: (Math.random() - 0.5) * 10,
+                gravity: 0.5,
+                damping: 0.95, // Energy loss on bounce
+                color: colors[Math.floor(Math.random() * colors.length)]
+            };
+        }
+
+        // Initialize with one ball
+        balls.push(createBall());
+
+        // Handle ball count changes
+        ballCountInput.addEventListener('input', (e) => {
+            const newCount = parseInt(e.target.value) || 1;
+            const currentCount = balls.length;
+            
+            if (newCount > currentCount) {
+                // Add new balls
+                for (let i = 0; i < newCount - currentCount; i++) {
+                    balls.push(createBall());
+                }
+            } else if (newCount < currentCount) {
+                // Remove balls
+                balls.length = newCount;
+            }
+        });
 
         // Performance tracking
         let lastTime = performance.now();
@@ -85,7 +150,7 @@
         console.log('4. Press Enter');
         console.log('%c=====================================', 'color: #00ff00; font-size: 16px; font-weight: bold;');
 
-        function updateBall(deltaTime) {
+        function updateBall(ball, deltaTime) {
             // Apply gravity
             ball.vy += ball.gravity;
 
@@ -112,12 +177,19 @@
             }
         }
 
-        function drawBall() {
+        function drawBall(ball) {
             ctx.beginPath();
             ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
             ctx.fillStyle = ball.color;
             ctx.fill();
             ctx.closePath();
+        }
+
+        function drawBallBackground(ball) {
+            // Draw a small black background behind the ball
+            const bgSize = ball.radius * 2.5;
+            ctx.fillStyle = 'black';
+            ctx.fillRect(ball.x - bgSize / 2, ball.y - bgSize / 2, bgSize, bgSize);
         }
 
         function updateStats(frameTime) {
@@ -148,13 +220,21 @@
                 frameCount = 0;
             }
 
-            // Clear canvas (black background)
-            ctx.fillStyle = 'black';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Clear canvas or draw backgrounds
+            if (clearCanvasCheckbox.checked) {
+                // Clear the whole canvas (black background)
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else {
+                // Draw small black backgrounds behind each ball
+                balls.forEach(ball => drawBallBackground(ball));
+            }
 
-            // Update and draw ball
-            updateBall(deltaTime);
-            drawBall();
+            // Update and draw all balls
+            balls.forEach(ball => {
+                updateBall(ball, deltaTime);
+                drawBall(ball);
+            });
 
             // Calculate frame paint time
             const frameEndTime = performance.now();
