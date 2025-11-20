@@ -77,6 +77,10 @@
             Number of balls:
             <input type="number" id="ballCount" min="1" max="100" value="1">
         </label>
+        <label>
+            Stripes:
+            <input type="number" id="stripes" min="1" max="10" value="1">
+        </label>
     </div>
     <div id="stats">
         FPS: 0<br>
@@ -91,10 +95,18 @@
         const clearCanvasCheckbox = document.getElementById('clearCanvas');
         const useOffscreenCanvasCheckbox = document.getElementById('useOffscreenCanvas');
         const ballCountInput = document.getElementById('ballCount');
+        const stripesInput = document.getElementById('stripes');
 
         // Offscreen canvas setup
         let offscreenCanvas = null;
         let offscreenCtx = null;
+
+        // Stripe canvases
+        let stripeCanvases = [];
+        let stripeContexts = [];
+        let stripeOffscreenCanvases = [];
+        let stripeOffscreenContexts = [];
+        let numStripes = 1;
 
         // Set canvas size to full window
         function resizeCanvas() {
@@ -110,6 +122,48 @@
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
 
+        // Create stripe canvases based on the number of stripes
+        function updateStripeCanvases() {
+            const newNumStripes = parseInt(stripesInput.value) || 1;
+            if (newNumStripes === numStripes && stripeCanvases.length > 0) {
+                return; // No change needed
+            }
+            
+            numStripes = newNumStripes;
+            
+            // Clear existing stripe canvases
+            stripeCanvases = [];
+            stripeContexts = [];
+            stripeOffscreenCanvases = [];
+            stripeOffscreenContexts = [];
+            
+            const stripeWidth = canvas.width / numStripes;
+            
+            for (let i = 0; i < numStripes; i++) {
+                // Create main stripe canvas
+                const stripeCanvas = document.createElement('canvas');
+                stripeCanvas.width = Math.ceil(stripeWidth);
+                stripeCanvas.height = canvas.height;
+                stripeCanvases.push(stripeCanvas);
+                stripeContexts.push(stripeCanvas.getContext('2d'));
+                
+                // Create offscreen stripe canvas if needed
+                if (useOffscreenCanvasCheckbox.checked) {
+                    const offscreenStripeCanvas = document.createElement('canvas');
+                    offscreenStripeCanvas.width = Math.ceil(stripeWidth);
+                    offscreenStripeCanvas.height = canvas.height;
+                    stripeOffscreenCanvases.push(offscreenStripeCanvas);
+                    stripeOffscreenContexts.push(offscreenStripeCanvas.getContext('2d'));
+                } else {
+                    stripeOffscreenCanvases.push(null);
+                    stripeOffscreenContexts.push(null);
+                }
+            }
+        }
+
+        stripesInput.addEventListener('input', updateStripeCanvases);
+        updateStripeCanvases(); // Initialize with default value
+
         // Create or destroy offscreen canvas based on checkbox state
         function updateOffscreenCanvas() {
             if (useOffscreenCanvasCheckbox.checked) {
@@ -123,6 +177,8 @@
                 offscreenCanvas = null;
                 offscreenCtx = null;
             }
+            // Update stripe canvases to match offscreen setting
+            updateStripeCanvases();
         }
 
         useOffscreenCanvasCheckbox.addEventListener('change', updateOffscreenCanvas);
@@ -224,6 +280,54 @@
             context.fillRect(ball.x - bgSize / 2, ball.y - bgSize / 2, bgSize, bgSize);
         }
 
+        // Get which stripe(s) a ball belongs to
+        function getBallStripes(ball) {
+            const stripeWidth = canvas.width / numStripes;
+            const leftEdge = ball.x - ball.radius;
+            const rightEdge = ball.x + ball.radius;
+            
+            const leftStripe = Math.floor(leftEdge / stripeWidth);
+            const rightStripe = Math.floor(rightEdge / stripeWidth);
+            
+            const stripes = [];
+            for (let i = Math.max(0, leftStripe); i <= Math.min(numStripes - 1, rightStripe); i++) {
+                stripes.push(i);
+            }
+            return stripes;
+        }
+
+        // Draw ball in a specific stripe context
+        function drawBallInStripe(ball, stripeIndex) {
+            const stripeWidth = canvas.width / numStripes;
+            const stripeLeft = stripeIndex * stripeWidth;
+            
+            const renderCtx = stripeOffscreenContexts[stripeIndex] || stripeContexts[stripeIndex];
+            
+            // Translate ball position to stripe-local coordinates
+            const localX = ball.x - stripeLeft;
+            
+            renderCtx.beginPath();
+            renderCtx.arc(localX, ball.y, ball.radius, 0, Math.PI * 2);
+            renderCtx.fillStyle = ball.color;
+            renderCtx.fill();
+            renderCtx.closePath();
+        }
+
+        // Draw ball background in a specific stripe context
+        function drawBallBackgroundInStripe(ball, stripeIndex) {
+            const stripeWidth = canvas.width / numStripes;
+            const stripeLeft = stripeIndex * stripeWidth;
+            
+            const renderCtx = stripeOffscreenContexts[stripeIndex] || stripeContexts[stripeIndex];
+            
+            // Translate ball position to stripe-local coordinates
+            const localX = ball.x - stripeLeft;
+            const bgSize = ball.radius * 2.5;
+            
+            renderCtx.fillStyle = 'black';
+            renderCtx.fillRect(localX - bgSize / 2, ball.y - bgSize / 2, bgSize, bgSize);
+        }
+
         function updateStats(frameTime) {
             // Add frame time to array
             frameTimes.push(frameTime);
@@ -252,30 +356,86 @@
                 frameCount = 0;
             }
 
-            // Determine which context to render to
-            const renderCtx = offscreenCtx || ctx;
-            const targetCanvas = offscreenCanvas || canvas;
+            if (numStripes === 1) {
+                // Single stripe mode - use original rendering logic
+                const renderCtx = offscreenCtx || ctx;
+                const targetCanvas = offscreenCanvas || canvas;
 
-            // Clear canvas or draw backgrounds
-            if (clearCanvasCheckbox.checked) {
-                // Clear the whole canvas (black background)
-                renderCtx.fillStyle = 'black';
-                renderCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+                // Clear canvas or draw backgrounds
+                if (clearCanvasCheckbox.checked) {
+                    // Clear the whole canvas (black background)
+                    renderCtx.fillStyle = 'black';
+                    renderCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+                } else {
+                    // Draw small black backgrounds behind each ball
+                    balls.forEach(ball => drawBallBackground(ball, renderCtx));
+                }
+
+                // Update and draw all balls
+                balls.forEach(ball => {
+                    updateBall(ball, deltaTime);
+                    drawBall(ball, renderCtx);
+                });
+
+                // If using offscreen canvas, copy to main canvas
+                if (offscreenCanvas) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(offscreenCanvas, 0, 0);
+                }
             } else {
-                // Draw small black backgrounds behind each ball
-                balls.forEach(ball => drawBallBackground(ball, renderCtx));
-            }
+                // Multi-stripe mode
+                const stripeWidth = canvas.width / numStripes;
 
-            // Update and draw all balls
-            balls.forEach(ball => {
-                updateBall(ball, deltaTime);
-                drawBall(ball, renderCtx);
-            });
+                // Clear all stripe canvases or draw backgrounds
+                for (let i = 0; i < numStripes; i++) {
+                    const renderCtx = stripeOffscreenContexts[i] || stripeContexts[i];
+                    const targetCanvas = stripeOffscreenCanvases[i] || stripeCanvases[i];
+                    
+                    if (clearCanvasCheckbox.checked) {
+                        // Clear the whole stripe canvas
+                        renderCtx.fillStyle = 'black';
+                        renderCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+                    }
+                }
 
-            // If using offscreen canvas, copy to main canvas
-            if (offscreenCanvas) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(offscreenCanvas, 0, 0);
+                // Update all balls
+                balls.forEach(ball => updateBall(ball, deltaTime));
+
+                // Draw backgrounds if not clearing whole canvas
+                if (!clearCanvasCheckbox.checked) {
+                    balls.forEach(ball => {
+                        const stripes = getBallStripes(ball);
+                        stripes.forEach(stripeIndex => {
+                            drawBallBackgroundInStripe(ball, stripeIndex);
+                        });
+                    });
+                }
+
+                // Draw all balls
+                balls.forEach(ball => {
+                    const stripes = getBallStripes(ball);
+                    stripes.forEach(stripeIndex => {
+                        drawBallInStripe(ball, stripeIndex);
+                    });
+                });
+
+                // Copy stripe canvases to main canvas
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                for (let i = 0; i < numStripes; i++) {
+                    const sourceCanvas = stripeOffscreenCanvases[i] || stripeCanvases[i];
+                    const x = i * stripeWidth;
+                    
+                    // If using offscreen stripe canvas, copy to stripe canvas first
+                    if (stripeOffscreenCanvases[i]) {
+                        stripeContexts[i].clearRect(0, 0, stripeCanvases[i].width, stripeCanvases[i].height);
+                        stripeContexts[i].drawImage(stripeOffscreenCanvases[i], 0, 0);
+                    }
+                    
+                    // Draw stripe to main canvas
+                    ctx.drawImage(stripeCanvases[i], x, 0);
+                }
             }
 
             // Calculate frame paint time
