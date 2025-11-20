@@ -74,6 +74,10 @@
             Render using offscreen canvas
         </label>
         <label>
+            <input type="checkbox" id="disableAutoBuffering">
+            Disable automatic double buffering
+        </label>
+        <label>
             Number of balls:
             <input type="number" id="ballCount" min="1" max="100" value="1">
         </label>
@@ -89,13 +93,43 @@
 
     <script>
         // Canvas setup
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d', { desynchronized: false });
         const statsDiv = document.getElementById('stats');
         const clearCanvasCheckbox = document.getElementById('clearCanvas');
         const useOffscreenCanvasCheckbox = document.getElementById('useOffscreenCanvas');
+        const disableAutoBufferingCheckbox = document.getElementById('disableAutoBuffering');
         const ballCountInput = document.getElementById('ballCount');
         const stripesInput = document.getElementById('stripes');
+
+        // Function to create or recreate the canvas context with appropriate options
+        function updateCanvasContext() {
+            const contextOptions = {
+                desynchronized: disableAutoBufferingCheckbox.checked
+            };
+            
+            // To change the desynchronized attribute, we need to replace the canvas element
+            const oldCanvas = canvas;
+            const newCanvas = document.createElement('canvas');
+            newCanvas.id = 'canvas';
+            newCanvas.width = oldCanvas.width;
+            newCanvas.height = oldCanvas.height;
+            
+            // Replace the canvas in the DOM
+            oldCanvas.parentNode.replaceChild(newCanvas, oldCanvas);
+            
+            // Update the global canvas reference
+            canvas = newCanvas;
+            
+            // Get the new context with options
+            ctx = canvas.getContext('2d', contextOptions);
+        }
+
+        // Handle checkbox change
+        disableAutoBufferingCheckbox.addEventListener('change', () => {
+            updateCanvasContext();
+            resizeCanvas();
+        });
 
         // Offscreen canvas setup
         let offscreenCanvas = null;
