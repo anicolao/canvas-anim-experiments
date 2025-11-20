@@ -70,6 +70,10 @@
             Clear whole canvas
         </label>
         <label>
+            <input type="checkbox" id="useOffscreenCanvas">
+            Render using offscreen canvas
+        </label>
+        <label>
             Number of balls:
             <input type="number" id="ballCount" min="1" max="100" value="1">
         </label>
@@ -85,15 +89,43 @@
         const ctx = canvas.getContext('2d');
         const statsDiv = document.getElementById('stats');
         const clearCanvasCheckbox = document.getElementById('clearCanvas');
+        const useOffscreenCanvasCheckbox = document.getElementById('useOffscreenCanvas');
         const ballCountInput = document.getElementById('ballCount');
+
+        // Offscreen canvas setup
+        let offscreenCanvas = null;
+        let offscreenCtx = null;
 
         // Set canvas size to full window
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            
+            // Resize offscreen canvas if it exists
+            if (offscreenCanvas) {
+                offscreenCanvas.width = canvas.width;
+                offscreenCanvas.height = canvas.height;
+            }
         }
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
+
+        // Create or destroy offscreen canvas based on checkbox state
+        function updateOffscreenCanvas() {
+            if (useOffscreenCanvasCheckbox.checked) {
+                if (!offscreenCanvas) {
+                    offscreenCanvas = document.createElement('canvas');
+                    offscreenCanvas.width = canvas.width;
+                    offscreenCanvas.height = canvas.height;
+                    offscreenCtx = offscreenCanvas.getContext('2d');
+                }
+            } else {
+                offscreenCanvas = null;
+                offscreenCtx = null;
+            }
+        }
+
+        useOffscreenCanvasCheckbox.addEventListener('change', updateOffscreenCanvas);
 
         // Ball array
         let balls = [];
@@ -177,19 +209,19 @@
             }
         }
 
-        function drawBall(ball) {
-            ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-            ctx.fillStyle = ball.color;
-            ctx.fill();
-            ctx.closePath();
+        function drawBall(ball, context) {
+            context.beginPath();
+            context.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            context.fillStyle = ball.color;
+            context.fill();
+            context.closePath();
         }
 
-        function drawBallBackground(ball) {
+        function drawBallBackground(ball, context) {
             // Draw a small black background behind the ball
             const bgSize = ball.radius * 2.5;
-            ctx.fillStyle = 'black';
-            ctx.fillRect(ball.x - bgSize / 2, ball.y - bgSize / 2, bgSize, bgSize);
+            context.fillStyle = 'black';
+            context.fillRect(ball.x - bgSize / 2, ball.y - bgSize / 2, bgSize, bgSize);
         }
 
         function updateStats(frameTime) {
@@ -220,21 +252,31 @@
                 frameCount = 0;
             }
 
+            // Determine which context to render to
+            const renderCtx = offscreenCtx || ctx;
+            const targetCanvas = offscreenCanvas || canvas;
+
             // Clear canvas or draw backgrounds
             if (clearCanvasCheckbox.checked) {
                 // Clear the whole canvas (black background)
-                ctx.fillStyle = 'black';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                renderCtx.fillStyle = 'black';
+                renderCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
             } else {
                 // Draw small black backgrounds behind each ball
-                balls.forEach(ball => drawBallBackground(ball));
+                balls.forEach(ball => drawBallBackground(ball, renderCtx));
             }
 
             // Update and draw all balls
             balls.forEach(ball => {
                 updateBall(ball, deltaTime);
-                drawBall(ball);
+                drawBall(ball, renderCtx);
             });
+
+            // If using offscreen canvas, copy to main canvas
+            if (offscreenCanvas) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(offscreenCanvas, 0, 0);
+            }
 
             // Calculate frame paint time
             const frameEndTime = performance.now();
