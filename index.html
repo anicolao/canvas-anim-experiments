@@ -412,6 +412,7 @@
         }
 
         // Apply the selected clear strategy to a canvas context
+        // These different strategies are provided for performance testing and comparison
         function applyClearStrategy(renderCtx, targetCanvas) {
             const strategy = clearStrategySelect.value;
             
@@ -423,7 +424,8 @@
                     break;
                     
                 case 'clearRect':
-                    // Clear using clearRect (makes transparent)
+                    // Clear using clearRect (makes transparent) followed by fillRect
+                    // Note: While fillRect alone would work, this tests clearRect performance
                     renderCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
                     // Fill with black to maintain background
                     renderCtx.fillStyle = 'black';
@@ -432,6 +434,8 @@
                     
                 case 'canvasWidth':
                     // Clear using canvas.width = canvas.width trick
+                    // Note: This resets the entire canvas context (transforms, styles, etc.)
+                    // and may be less efficient, but is provided for performance comparison
                     const currentWidth = targetCanvas.width;
                     targetCanvas.width = currentWidth;
                     // Fill with black to maintain background
