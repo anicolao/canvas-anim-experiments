@@ -68,14 +68,27 @@
             padding: 2px 5px;
             font-family: 'Courier New', monospace;
         }
+        #controls select {
+            margin-left: 5px;
+            background-color: #222;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 2px 5px;
+            font-family: 'Courier New', monospace;
+        }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
     <div id="controls">
         <label>
-            <input type="checkbox" id="clearCanvas" checked>
-            Clear whole canvas
+            Clear Strategy:
+            <select id="clearStrategy">
+                <option value="fillRect">fillRect (black)</option>
+                <option value="clearRect">clearRect</option>
+                <option value="canvasWidth">canvas.width = canvas.width</option>
+                <option value="partial">Partial (behind balls only)</option>
+            </select>
         </label>
         <label>
             <input type="checkbox" id="useOffscreenCanvas">
@@ -104,7 +117,7 @@
         let canvas = document.getElementById('canvas');
         let ctx = canvas.getContext('2d', { desynchronized: false });
         const statsDiv = document.getElementById('stats');
-        const clearCanvasCheckbox = document.getElementById('clearCanvas');
+        const clearStrategySelect = document.getElementById('clearStrategy');
         const useOffscreenCanvasCheckbox = document.getElementById('useOffscreenCanvas');
         const disableAutoBufferingCheckbox = document.getElementById('disableAutoBuffering');
         const ballCountInput = document.getElementById('ballCount');
@@ -398,6 +411,41 @@
             renderCtx.fillRect(localX - bgSize / 2, ball.y - bgSize / 2, bgSize, bgSize);
         }
 
+        // Apply the selected clear strategy to a canvas context
+        function applyClearStrategy(renderCtx, targetCanvas) {
+            const strategy = clearStrategySelect.value;
+            
+            switch(strategy) {
+                case 'fillRect':
+                    // Clear using fillRect with black background
+                    renderCtx.fillStyle = 'black';
+                    renderCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+                    break;
+                    
+                case 'clearRect':
+                    // Clear using clearRect (makes transparent)
+                    renderCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+                    // Fill with black to maintain background
+                    renderCtx.fillStyle = 'black';
+                    renderCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+                    break;
+                    
+                case 'canvasWidth':
+                    // Clear using canvas.width = canvas.width trick
+                    const currentWidth = targetCanvas.width;
+                    targetCanvas.width = currentWidth;
+                    // Fill with black to maintain background
+                    renderCtx.fillStyle = 'black';
+                    renderCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+                    break;
+                    
+                case 'partial':
+                    // Don't clear the whole canvas, only behind balls
+                    // This will be handled separately in the animate function
+                    break;
+            }
+        }
+
         function updateStats(frameTime) {
             // Add frame time to array
             frameTimes.push(frameTime);
@@ -431,14 +479,14 @@
                 const renderCtx = offscreenCtx || ctx;
                 const targetCanvas = offscreenCanvas || canvas;
 
-                // Clear canvas or draw backgrounds
-                if (clearCanvasCheckbox.checked) {
-                    // Clear the whole canvas (black background)
-                    renderCtx.fillStyle = 'black';
-                    renderCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
-                } else {
+                // Apply clear strategy
+                const clearStrategy = clearStrategySelect.value;
+                if (clearStrategy === 'partial') {
                     // Draw small black backgrounds behind each ball
                     balls.forEach(ball => drawBallBackground(ball, renderCtx));
+                } else {
+                    // Use the selected clear strategy
+                    applyClearStrategy(renderCtx, targetCanvas);
                 }
 
                 // Update and draw all balls
@@ -455,24 +503,24 @@
             } else {
                 // Multi-stripe mode
                 const stripeWidth = canvas.width / numStripes;
+                const clearStrategy = clearStrategySelect.value;
 
                 // Clear all stripe canvases or draw backgrounds
                 for (let i = 0; i < numStripes; i++) {
                     const renderCtx = stripeOffscreenContexts[i] || stripeContexts[i];
                     const targetCanvas = stripeOffscreenCanvases[i] || stripeCanvases[i];
                     
-                    if (clearCanvasCheckbox.checked) {
-                        // Clear the whole stripe canvas
-                        renderCtx.fillStyle = 'black';
-                        renderCtx.fillRect(0, 0, targetCanvas.width, targetCanvas.height);
+                    if (clearStrategy !== 'partial') {
+                        // Use the selected clear strategy
+                        applyClearStrategy(renderCtx, targetCanvas);
                     }
                 }
 
                 // Update all balls
                 balls.forEach(ball => updateBall(ball, deltaTime));
 
-                // Draw backgrounds if not clearing whole canvas
-                if (!clearCanvasCheckbox.checked) {
+                // Draw backgrounds if using partial clear
+                if (clearStrategy === 'partial') {
                     balls.forEach(ball => {
                         const stripes = getBallStripes(ball);
                         stripes.forEach(stripeIndex => {
